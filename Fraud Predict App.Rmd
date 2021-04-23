@@ -1,0 +1,121 @@
+---
+title: "Fraud Predict App"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    social: menu
+    logo: Logo.JPG
+    theme: journal
+    storyboard: TRUE
+runtime: shiny 
+---
+
+```{r setup, include=FALSE}
+
+# Loading Packages
+library(flexdashboard)
+library(shiny)
+library(shinythemes)
+library(e1071)
+library(caret)
+library(caTools)
+library(dplyr)
+
+
+# For adding code link to the app
+# source_code: embed # For adding source codes 
+
+```
+
+```{r}
+# Loading dataset
+creditcard_data <- read.csv("creditcard.csv")
+```
+
+```{r}
+# Data preparation and Preprocessing of the train dataset
+creditcard_VarImp <- creditcard_data[,c(5,11,12,13,15,31)]
+
+my_data <- creditcard_VarImp
+
+#make class a factor
+my_data$Class <- as.factor(my_data$Class)
+
+#modeling
+set.seed(1234)
+
+#split the dataset
+data_sample<-sample.split(my_data, SplitRatio =0.80)
+train_data<-subset(my_data,data_sample==TRUE)
+test_data<-subset(my_data,data_sample==FALSE)
+
+x_train <-  train_data[,c(1:5)]
+y_train <- train_data[,c(6)]
+x_test <- test_data[,c(1:5)]
+y_test <- test_data["Class"]
+
+#cross validation
+control <- trainControl(method="repeatedcv", number=5, repeats=3)
+```
+
+
+
+Fraud Prediction {.storyboard data-navmenu="Menu"}
+===============================================================================
+
+Data Entry Panel {.sidebar data-width=350}
+-------------------------------------------------------------------------------
+**Customer Data Entry Panel**
+
+```{r}
+numericInput("v4", label ="V4",value = 1, min = 1, max = 1000000 )
+
+numericInput("v10", label ="V10",value = 1, min = 1, max = 1000000 )
+
+numericInput("v11", label ="V11",value = 1, min = 1, max = 1000000 )
+
+numericInput("v12", label ="V12",value = 1, min = 1, max = 1000000 )
+
+numericInput("v14", label ="V14",value = 1, min = 1, max = 1000000 )
+
+actionButton("submit", "Submit")
+
+# Data Pipeline: Here we create a function which transforms and predicts for new incoming data from the user.
+
+## Data preparation and Preprocessing of user input data
+userdata_function <- reactive({
+  if(input$submit>0){
+  userDT1 <- data.frame(col1=c(input$v4),col2=c(input$v10),col3=c(input$v11),col4=c(input$v12),col5=c(input$v14))
+  
+  colnames(userDT1) <- colnames(x_test) # changing the columns names of userDT to conform with insuranceDT
+  return(userDT1)
+  }
+  
+})
+
+# Model training
+set.seed(1234)
+fraud_model <- reactive({
+  lm1 <- train(form=Class~., data=train_data, method="glm", family="binomial",trControl=control,tuneLength = 5)
+  return(lm1)
+})  
+
+# Using the model to predict customer data
+model_pred <- reactive({
+  pred <- predict(fraud_model(),userdata_function())
+  return(pred)
+})
+```
+
+### FRAUD DETECTION SECTION
+
+```{r}
+renderText({
+  if(input$submit==0){
+    paste("Enter applicant's data to obtain prediction.")
+  }else{
+      return(model_pred())
+      }
+})
+```
